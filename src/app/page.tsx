@@ -1,69 +1,95 @@
-import Image from "next/image";
+import { createExercise, logWorkout } from "@/app/actions";
+import MusclePicker from "@/components/MusclePicker";
+import PageHeader from "@/components/PageHeader";
+import WeeklyProgress from "@/components/WeeklyProgress";
+import { formatWeight, isMuscle } from "@/lib/muscles";
+import { prisma } from "@/lib/prisma";
+import { getWeeklySets } from "@/lib/progress";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home({ searchParams }: PageProps<"/">) {
+  const { muscle: muscleParam } = await searchParams;
+  const muscle = isMuscle(muscleParam) ? muscleParam : "Chest";
+
+  const [exercises, weekly] = await Promise.all([
+    prisma.exercise.findMany({ where: { muscle }, orderBy: { createdAt: "asc" } }),
+    getWeeklySets(),
+  ]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <PageHeader title="Gym Note" subtitle="Track your workouts smarter" />
+
+      <MusclePicker selected={muscle} />
+
+      {/* Exercises List */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xl font-semibold">{muscle} Exercises</h2>
+          <span className="text-zinc-400 text-sm">{exercises.length} exercises</span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="space-y-3">
+          {exercises.map((exercise) => (
+            <div key={exercise.id} className="bg-zinc-900 rounded-2xl p-4 border border-zinc-800">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-lg">{exercise.name}</h3>
+                  <p className="text-zinc-400 text-sm mt-1">{exercise.muscle}</p>
+                </div>
+                <form action={logWorkout}>
+                  <input type="hidden" name="exerciseId" value={exercise.id} />
+                  <button className="bg-red-500 hover:bg-red-400 transition px-4 py-2 rounded-xl text-sm font-medium">
+                    Add
+                  </button>
+                </form>
+              </div>
+              <div className="flex gap-3 mt-4 text-sm">
+                <div className="bg-zinc-800 px-3 py-2 rounded-xl text-zinc-300">🏋️ {formatWeight(exercise.weight)}</div>
+                <div className="bg-zinc-800 px-3 py-2 rounded-xl text-zinc-300">🔄 {exercise.reps} reps</div>
+              </div>
+            </div>
+          ))}
+
+          {/* New exercise */}
+          <details className="bg-zinc-900 rounded-2xl border border-dashed border-zinc-700">
+            <summary className="cursor-pointer p-4 text-zinc-400 text-sm">+ New {muscle} exercise</summary>
+            <form action={createExercise} className="px-4 pb-4 space-y-3">
+              <input type="hidden" name="muscle" value={muscle} />
+              <input
+                name="name"
+                required
+                placeholder="Exercise name"
+                className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <div className="flex gap-3">
+                <input
+                  name="weight"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  placeholder="kg (empty = bodyweight)"
+                  className="flex-1 min-w-0 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-500"
+                />
+                <input
+                  name="reps"
+                  type="number"
+                  min="1"
+                  required
+                  placeholder="reps"
+                  className="w-24 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <button className="w-full bg-red-500 hover:bg-red-400 transition px-4 py-2 rounded-xl text-sm font-medium">
+                Save
+              </button>
+            </form>
+          </details>
         </div>
-      </main>
-    </div>
+      </div>
+
+      <WeeklyProgress days={weekly} />
+    </>
   );
 }
